@@ -14,7 +14,7 @@ import 'react-toastify/dist/ReactToastify.css';
 export default function App() {
   return (
     <Provider store={store}>
-      <Router>
+      <Router basename="/Ecommerce">
         <div className="flex flex-col min-h-screen">
           <Header />
           <main className="flex-grow">
