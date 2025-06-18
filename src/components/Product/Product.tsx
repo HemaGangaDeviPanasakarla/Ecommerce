@@ -8,12 +8,12 @@ import { toast } from "react-toastify";
 import type { Product } from '../../features/products/types';
 export default function Product() {
   const dispatch = useAppDispatch();
-  const { items: products, status } = useAppSelector((state) => state.products);
+  const { items: products } = useAppSelector((state) => state.products);
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('All');
   const [priceFilter, setPriceFilter] = useState('All');
   const [ratingFilter, setRatingFilter] = useState('All');
-  
+
   const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
   const [showPriceDropdown, setShowPriceDropdown] = useState(false);
   const [showRatingDropdown, setShowRatingDropdown] = useState(false);
@@ -55,7 +55,7 @@ export default function Product() {
     return matchesSearch && matchesCategory && matchesPrice && matchesRating;
   });
 
-  const handleAddToCart =  (product: Product) => {
+  const handleAddToCart = (product: Product) => {
     dispatch(addToCart({
       id: product.id,
       title: product.title,
@@ -88,8 +88,7 @@ export default function Product() {
     { label: '2⭐ & above', value: '2' },
   ];
 
-  if (status === 'loading') return <div className="text-center py-8">Loading...</div>;
-  if (status === 'failed') return <div className="text-center py-8 text-red-500">Failed to load products</div>;
+
 
   return (
     <div className="container mx-auto px-4 py-20">
@@ -109,7 +108,7 @@ export default function Product() {
         </div>
 
         <div className="relative" ref={categoryRef}>
-          <div 
+          <div
             className="flex items-center justify-between px-4 py-3 border rounded-lg cursor-pointer min-w-[180px]"
             onClick={() => setShowCategoryDropdown(!showCategoryDropdown)}
           >
@@ -135,7 +134,7 @@ export default function Product() {
         </div>
 
         <div className="relative" ref={priceRef}>
-          <div 
+          <div
             className="flex items-center justify-between px-4 py-3 border rounded-lg cursor-pointer min-w-[180px]"
             onClick={() => setShowPriceDropdown(!showPriceDropdown)}
           >
@@ -161,7 +160,7 @@ export default function Product() {
         </div>
 
         <div className="relative" ref={ratingRef}>
-          <div 
+          <div
             className="flex items-center justify-between px-4 py-3 border rounded-lg cursor-pointer min-w-[180px]"
             onClick={() => setShowRatingDropdown(!showRatingDropdown)}
           >
@@ -188,27 +187,35 @@ export default function Product() {
       </div>
 
       {filteredProducts.length > 0 ? (
+
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
           {filteredProducts.map(product => (
-            <div key={product.id} className="border rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow">
-              <img 
-                src={product.image} 
-                alt={product.title} 
+            <div
+              key={product.id}
+              className="border rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow flex flex-col min-h-[420px]"
+            >
+              <img
+                src={product.image}
+                alt={product.title}
                 className="w-full h-48 object-contain mb-4"
               />
               <h3 className="font-medium text-center mb-2 line-clamp-2">{product.title}</h3>
               <p className="text-center mb-1">Rs.{product.price}</p>
               <p className="text-center text-yellow-500 mb-4">⭐ {product.rating}</p>
-              <button 
-                onClick={() => handleAddToCart(product)}
-                className="w-full py-2 border border-gray-800 rounded hover:bg-gray-100 transition-colors flex items-center justify-center gap-2"
-              >
-                <FontAwesomeIcon icon={faCartPlus} />
-                <span>Add to Cart</span>
-              </button>
+
+              <div className="mt-auto">
+                <button
+                  onClick={() => handleAddToCart(product)}
+                  className="w-full py-2 border border-gray-800 rounded hover:bg-gray-100 transition-colors flex items-center justify-center gap-2"
+                >
+                  <FontAwesomeIcon icon={faCartPlus} />
+                  <span>Add to Cart</span>
+                </button>
+              </div>
             </div>
           ))}
         </div>
+
       ) : (
         <div className="text-center py-12">
           <p className="text-xl">Sorry, no results found!</p>

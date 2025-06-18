@@ -18,13 +18,11 @@ export default function App() {
           <Header />
           <main className="flex-grow">
             <Routes>
-              {/* ✅ Redirect from "/" to "/home" */}
+
               <Route path="/" element={<Navigate to="/home" replace />} />
               <Route path="/home" element={<Home />} />
               <Route path="/products" element={<Product />} />
               <Route path="/checkout" element={<Checkout />} />
-
-              {/* Catch-all route */}
               <Route path="*" element={<Navigate to="/home" replace />} />
             </Routes>
           </main>

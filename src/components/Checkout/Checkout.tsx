@@ -8,23 +8,26 @@ export default function Checkout() {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const { items: cartItems } = useAppSelector((state) => state.cart);
+
   const [formData, setFormData] = useState({
     name: '',
     email: '',
     address: '',
-    paymentOption: 'select any option'
+    paymentOption: 'select any option',
   });
+
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [orderConfirmed, setOrderConfirmed] = useState(false);
+  const [finalTotal, setFinalTotal] = useState(0); 
 
   const total = cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    setFormData((prev) => ({ ...prev, [name]: value }));
     if (errors[name]) {
-      setErrors(prev => ({ ...prev, [name]: '' }));
+      setErrors((prev) => ({ ...prev, [name]: '' }));
     }
   };
 
@@ -52,7 +55,8 @@ export default function Checkout() {
 
     setIsSubmitting(true);
     try {
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      setFinalTotal(total); 
       dispatch(clearCart());
       setOrderConfirmed(true);
       toast.success("Order placed successfully!");
@@ -79,7 +83,7 @@ export default function Checkout() {
             <p><strong>Email:</strong> {formData.email}</p>
             <p><strong>Address:</strong> {formData.address}</p>
             <p><strong>Payment Method:</strong> {formData.paymentOption}</p>
-            <p><strong>Total Amount:</strong> Rs.{total.toFixed(2)}</p>
+            <p><strong>Total Amount:</strong> Rs.{finalTotal.toFixed(2)}</p> 
           </div>
           <button
             onClick={() => navigate('/home')}
@@ -98,7 +102,7 @@ export default function Checkout() {
         <div className="bg-gray-50 p-6 rounded-lg">
           <h2 className="text-xl font-bold mb-4 pb-2 border-b">Order Summary</h2>
           <div className="space-y-4">
-            {cartItems.map(item => (
+            {cartItems.map((item) => (
               <div key={item.id} className="flex items-center border-b pb-4">
                 <img src={item.image} alt={item.title} className="w-16 h-16 object-contain mr-4" />
                 <div>
