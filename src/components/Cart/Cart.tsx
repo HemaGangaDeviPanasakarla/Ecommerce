@@ -6,7 +6,7 @@ import {
   decrementQuantity, 
   removeFromCart, 
   toggleCart,
-  clearCart 
+   
 } from '../../features/cart/cartSlice';
 import { toast } from 'react-toastify';
 
