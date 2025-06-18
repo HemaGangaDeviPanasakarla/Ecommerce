@@ -3,15 +3,16 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
-  "homepage": "https://HemaGangaDeviPanasakarla.github.io/Ecommerce",
-  "scripts": {
-    "dev": "vite",
-    "build": "tsc -b && vite build",
-    "preview": "vite preview",
-    "lint": "eslint .",
-    "predeploy": "npm run build",
-    "deploy": "gh-pages -d dist"
-  },
+"homepage": "https://HemaGangaDeviPanasakarla.github.io/Ecommerce",
+"scripts": {
+  "dev": "vite",
+  "build": "tsc -b && vite build",
+  "preview": "vite preview",
+  "predeploy": "npm run build",
+  "deploy": "gh-pages -d dist"
+},
+
+
   "dependencies": {
     "@fortawesome/fontawesome-svg-core": "^6.7.2",
     "@fortawesome/free-solid-svg-icons": "^6.7.2",

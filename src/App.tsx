@@ -1,5 +1,4 @@
-import { HashRouter as Router, Routes, Route } from 'react-router-dom';
-
+import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Provider } from 'react-redux';
 import { store } from './store';
 import Header from './components/Header/Header';
@@ -19,14 +18,14 @@ export default function App() {
           <Header />
           <main className="flex-grow">
             <Routes>
-             
-              <Route path="/" element={<Home />} />
+              {/* ✅ Redirect from "/" to "/home" */}
+              <Route path="/" element={<Navigate to="/home" replace />} />
               <Route path="/home" element={<Home />} />
               <Route path="/products" element={<Product />} />
               <Route path="/checkout" element={<Checkout />} />
 
-
-              <Route path="*" element={<Home />} />
+              {/* Catch-all route */}
+              <Route path="*" element={<Navigate to="/home" replace />} />
             </Routes>
           </main>
           <Footer />
