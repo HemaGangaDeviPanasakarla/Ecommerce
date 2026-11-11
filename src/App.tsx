@@ -9,11 +9,14 @@ import Cart from './components/Cart/Cart';
 import Checkout from './components/Checkout/Checkout';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
+import { WebMCPManager } from './webmcp/WebMCPManager';
+import AIAssistant from './components/AIAssistant/AIAssistant';
 
 export default function App() {
   return (
     <Provider store={store}>
       <Router>
+        <WebMCPManager />
         <div className="flex flex-col min-h-screen">
           <Header />
           <main className="flex-grow">
@@ -28,6 +31,7 @@ export default function App() {
           </main>
           <Footer />
           <Cart />
+          <AIAssistant />
           <ToastContainer position="top-center" autoClose={3000} />
         </div>
       </Router>

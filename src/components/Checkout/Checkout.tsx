@@ -119,7 +119,14 @@ export default function Checkout() {
 
         <div className="bg-white p-6 rounded-lg shadow-sm">
           <h1 className="text-2xl font-bold mb-6">Checkout</h1>
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form
+            onSubmit={handleSubmit}
+            className="space-y-4"
+            {...{
+              'tool-name': 'submit_checkout_form',
+              'tool-description': 'Submit customer shipping details and payment method to complete the checkout order.',
+            }}
+          >
             <div>
               <label htmlFor="name" className="block mb-1 font-medium">Full Name</label>
               <input
@@ -130,6 +137,7 @@ export default function Checkout() {
                 onChange={handleInputChange}
                 className={`w-full p-3 border rounded ${errors.name ? 'border-red-500' : 'border-gray-300'}`}
                 placeholder="Enter your full name"
+                {...{ 'tool-prop-description': 'Full legal name of the recipient' }}
               />
               {errors.name && <p className="text-red-500 text-sm mt-1">{errors.name}</p>}
             </div>
@@ -144,6 +152,7 @@ export default function Checkout() {
                 onChange={handleInputChange}
                 className={`w-full p-3 border rounded ${errors.email ? 'border-red-500' : 'border-gray-300'}`}
                 placeholder="Enter your email"
+                {...{ 'tool-prop-description': 'Email address for order receipts and confirmation' }}
               />
               {errors.email && <p className="text-red-500 text-sm mt-1">{errors.email}</p>}
             </div>
@@ -158,6 +167,7 @@ export default function Checkout() {
                 rows={3}
                 className={`w-full p-3 border rounded ${errors.address ? 'border-red-500' : 'border-gray-300'}`}
                 placeholder="Enter your complete address"
+                {...{ 'tool-prop-description': 'Complete physical delivery address' }}
               />
               {errors.address && <p className="text-red-500 text-sm mt-1">{errors.address}</p>}
             </div>
@@ -170,6 +180,7 @@ export default function Checkout() {
                 value={formData.paymentOption}
                 onChange={handleInputChange}
                 className={`w-full p-3 border rounded ${errors.paymentOption ? 'border-red-500' : 'border-gray-300'}`}
+                {...{ 'tool-prop-description': 'Selected payment method (Phone Pay, Gpay, Cash on Delivery)' }}
               >
                 <option value="select any option">Select payment method</option>
                 <option value="Phone Pay">Phone Pay</option>

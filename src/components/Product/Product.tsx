@@ -104,6 +104,10 @@ export default function Product() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             autoFocus
+            {...{
+              'tool-name': 'search_products_input',
+              'tool-description': 'Interactive search input to filter displayed products by keyword',
+            }}
           />
         </div>
 

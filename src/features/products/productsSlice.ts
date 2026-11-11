@@ -1,5 +1,6 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import type { Product } from './types';
+import { productService } from '../../services/productService';
 
 interface ProductsState {
   items: Product[];
@@ -14,16 +15,7 @@ const initialState: ProductsState = {
 };
 
 export const fetchProducts = createAsyncThunk('products/fetchProducts', async () => {
-  const response = await fetch('https://fakestoreapi.com/products');
-  const data = await response.json();
-  return data.map((product: any) => ({
-    id: product.id,
-    title: product.title,
-    price: product.price,
-    image: product.image,
-    category: product.category,
-    rating: product.rating?.rate || 0,
-  }));
+  return await productService.getProducts();
 });
 
 export const productsSlice = createSlice({
