@@ -7,6 +7,62 @@ import type { WebMCPTool } from '../types';
 import { productService } from '../../services/productService';
 import type { Product } from '../../features/products/types';
 
+interface CatalogFilterInput {
+  query?: string;
+  category?: string;
+  minPrice?: number;
+  maxPrice?: number;
+  minRating?: number;
+}
+
+async function filterCatalogProducts(input: CatalogFilterInput): Promise<
+  | { error: true; message: string }
+  | {
+      error: false;
+      filtered: Product[];
+      query: string;
+      category: string;
+      minPrice: number | null;
+      maxPrice: number | null;
+      minRating: number | null;
+    }
+> {
+  const query = (input.query || '').trim();
+  const queryWords = query ? query.toLowerCase().split(/\s+/).filter(Boolean) : [];
+  const category = input.category && input.category !== 'All' ? input.category.toLowerCase() : null;
+  const minPrice = typeof input.minPrice === 'number' ? input.minPrice : null;
+  const maxPrice = typeof input.maxPrice === 'number' ? input.maxPrice : null;
+  const minRating = typeof input.minRating === 'number' ? input.minRating : null;
+
+  if (minPrice !== null && maxPrice !== null && minPrice > maxPrice) {
+    return {
+      error: true,
+      message: 'Invalid price range: minPrice cannot be greater than maxPrice.',
+    };
+  }
+
+  const products = await productService.getProducts();
+  const filtered = products.filter((p: Product) => {
+    const titleLower = p.title.toLowerCase();
+    const matchesQuery = !query || titleLower.includes(query.toLowerCase()) || queryWords.every((w) => titleLower.includes(w));
+    const matchesCat = !category || p.category.toLowerCase() === category;
+    const matchesMinPrice = minPrice === null || p.price >= minPrice;
+    const matchesMaxPrice = maxPrice === null || p.price <= maxPrice;
+    const matchesRating = minRating === null || p.rating >= minRating;
+    return matchesQuery && matchesCat && matchesMinPrice && matchesMaxPrice && matchesRating;
+  });
+
+  return {
+    error: false,
+    filtered,
+    query,
+    category: category || 'All',
+    minPrice,
+    maxPrice,
+    minRating,
+  };
+}
+
 export function createProductTools(): WebMCPTool[] {
   const searchProductsTool: WebMCPTool = {
     name: 'search_products',
@@ -43,7 +99,7 @@ export function createProductTools(): WebMCPTool[] {
       },
       required: ['query'],
     },
-    execute: async (input: { query?: string; category?: string; minPrice?: number; maxPrice?: number; limit?: number }) => {
+    execute: async (input: CatalogFilterInput & { limit?: number }) => {
       const query = (input?.query || '').trim();
       if (!query) {
         return {
@@ -52,45 +108,19 @@ export function createProductTools(): WebMCPTool[] {
         };
       }
 
-      const products = await productService.getProducts();
-      const category = input.category && input.category !== 'All' ? input.category.toLowerCase() : null;
-      const minPrice = typeof input?.minPrice === 'number' ? input.minPrice : null;
-      const maxPrice = typeof input?.maxPrice === 'number' ? input.maxPrice : null;
-
-      if (minPrice !== null && maxPrice !== null && minPrice > maxPrice) {
-        return {
-          error: true,
-          message: 'Invalid price range: minPrice cannot be greater than maxPrice.',
-        };
-      }
-
-      const queryWords = query.toLowerCase().split(/\s+/).filter(Boolean);
-      const filtered = products.filter((p: Product) => {
-        const titleLower = p.title.toLowerCase();
-        const matchesQuery = titleLower.includes(query.toLowerCase()) || queryWords.every((w) => titleLower.includes(w));
-        const matchesCat = !category || p.category.toLowerCase() === category;
-        const matchesMinPrice = minPrice === null || p.price >= minPrice;
-        const matchesMaxPrice = maxPrice === null || p.price <= maxPrice;
-        return matchesQuery && matchesCat && matchesMinPrice && matchesMaxPrice;
-      });
+      const result = await filterCatalogProducts({ ...input, query });
+      if (result.error) return result;
 
       const limit = input.limit && input.limit > 0 ? input.limit : 10;
-      const results = filtered.slice(0, limit);
+      const results = result.filtered.slice(0, limit);
 
       return {
-        query,
-        category: category || 'All',
-        priceRange: { minPrice, maxPrice },
-        totalMatches: filtered.length,
+        query: result.query,
+        category: result.category,
+        priceRange: { minPrice: result.minPrice, maxPrice: result.maxPrice },
+        totalMatches: result.filtered.length,
         returnedCount: results.length,
-        products: results.map((p) => ({
-          id: p.id,
-          title: p.title,
-          price: p.price,
-          category: p.category,
-          rating: p.rating,
-          image: p.image,
-        })),
+        products: results,
       };
     },
   };
@@ -128,10 +158,7 @@ export function createProductTools(): WebMCPTool[] {
         };
       }
 
-      return {
-        found: true,
-        product,
-      };
+      return { found: true, product };
     },
   };
 
@@ -175,53 +202,22 @@ export function createProductTools(): WebMCPTool[] {
         },
       },
     },
-    execute: async (input: {
-      query?: string;
-      category?: string;
-      minPrice?: number;
-      maxPrice?: number;
-      minRating?: number;
-      limit?: number;
-    }) => {
-      const products = await productService.getProducts();
-
-      const query = (input?.query || '').trim();
-      const queryWords = query ? query.toLowerCase().split(/\s+/).filter(Boolean) : [];
-      const categoryFilter = input?.category && input.category !== 'All' ? input.category.toLowerCase() : null;
-      const minPrice = typeof input?.minPrice === 'number' ? input.minPrice : null;
-      const maxPrice = typeof input?.maxPrice === 'number' ? input.maxPrice : null;
-      const minRating = typeof input?.minRating === 'number' ? input.minRating : null;
-
-      if (minPrice !== null && maxPrice !== null && minPrice > maxPrice) {
-        return {
-          error: true,
-          message: 'Invalid price range: minPrice cannot be greater than maxPrice.',
-        };
-      }
-
-      const filtered = products.filter((product: Product) => {
-        const titleLower = product.title.toLowerCase();
-        const matchesQuery = !query || titleLower.includes(query.toLowerCase()) || queryWords.every((w) => titleLower.includes(w));
-        const matchesCategory = !categoryFilter || product.category.toLowerCase() === categoryFilter;
-        const matchesMinPrice = minPrice === null || product.price >= minPrice;
-        const matchesMaxPrice = maxPrice === null || product.price <= maxPrice;
-        const matchesRating = minRating === null || product.rating >= minRating;
-
-        return matchesQuery && matchesCategory && matchesMinPrice && matchesMaxPrice && matchesRating;
-      });
+    execute: async (input: CatalogFilterInput & { limit?: number }) => {
+      const result = await filterCatalogProducts(input || {});
+      if (result.error) return result;
 
       const limit = input?.limit && input.limit > 0 ? input.limit : 20;
-      const results = filtered.slice(0, limit);
+      const results = result.filtered.slice(0, limit);
 
       return {
-        totalMatches: filtered.length,
+        totalMatches: result.filtered.length,
         returnedCount: results.length,
         appliedFilters: {
-          query: query || undefined,
-          category: categoryFilter || 'All',
-          minPrice,
-          maxPrice,
-          minRating,
+          query: result.query || undefined,
+          category: result.category,
+          minPrice: result.minPrice,
+          maxPrice: result.maxPrice,
+          minRating: result.minRating,
         },
         products: results,
       };
@@ -230,4 +226,3 @@ export function createProductTools(): WebMCPTool[] {
 
   return [searchProductsTool, getProductDetailsTool, filterProductsTool];
 }
-

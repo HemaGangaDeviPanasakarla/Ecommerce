@@ -60,7 +60,7 @@ export default function Checkout() {
       dispatch(clearCart());
       setOrderConfirmed(true);
       toast.success("Order placed successfully!");
-    } catch (error) {
+    } catch {
       toast.error("Failed to place order");
     } finally {
       setIsSubmitting(false);

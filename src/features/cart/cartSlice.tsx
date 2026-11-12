@@ -1,6 +1,5 @@
 import { createSlice } from '@reduxjs/toolkit';
-import type { PayloadAction } from '@reduxjs/toolkit'; 
-
+import type { PayloadAction } from '@reduxjs/toolkit';
 import type { CartItem } from './types';
 
 interface CartState {
@@ -8,12 +7,16 @@ interface CartState {
   isOpen: boolean;
 }
 
-const initialState: CartState = {
-  items: JSON.parse(localStorage.getItem('cartItems') || '[]'),
-  isOpen: false
+const persistCart = (items: CartItem[]) => {
+  localStorage.setItem('cartItems', JSON.stringify(items));
 };
 
-export const cartSlice = createSlice({
+const initialState: CartState = {
+  items: JSON.parse(localStorage.getItem('cartItems') || '[]'),
+  isOpen: false,
+};
+
+const cartSlice = createSlice({
   name: 'cart',
   initialState,
   reducers: {
@@ -25,7 +28,7 @@ export const cartSlice = createSlice({
       } else {
         state.items.push({ ...action.payload, quantity: addQty });
       }
-      localStorage.setItem('cartItems', JSON.stringify(state.items));
+      persistCart(state.items);
     },
     updateQuantity: (state, action: PayloadAction<{ id: number; quantity: number }>) => {
       const { id, quantity } = action.payload;
@@ -37,21 +40,21 @@ export const cartSlice = createSlice({
           item.quantity = quantity;
         }
       }
-      localStorage.setItem('cartItems', JSON.stringify(state.items));
+      persistCart(state.items);
     },
     removeFromCart: (state, action: PayloadAction<number>) => {
       state.items = state.items.filter(item => item.id !== action.payload);
-      localStorage.setItem('cartItems', JSON.stringify(state.items));
+      persistCart(state.items);
     },
     incrementQuantity: (state, action: PayloadAction<number>) => {
       const item = state.items.find(item => item.id === action.payload);
       if (item) item.quantity += 1;
-      localStorage.setItem('cartItems', JSON.stringify(state.items));
+      persistCart(state.items);
     },
     decrementQuantity: (state, action: PayloadAction<number>) => {
       const item = state.items.find(item => item.id === action.payload);
       if (item && item.quantity > 1) item.quantity -= 1;
-      localStorage.setItem('cartItems', JSON.stringify(state.items));
+      persistCart(state.items);
     },
     toggleCart: (state) => {
       state.isOpen = !state.isOpen;

@@ -5,6 +5,7 @@
 
 import type { WebMCPTool } from '../types';
 import type { AppDispatch, RootState } from '../../store';
+import type { CartItem } from '../../features/cart/types';
 import { addToCart, removeFromCart, updateQuantity } from '../../features/cart/cartSlice';
 import { productService } from '../../services/productService';
 import { toast } from 'react-toastify';
@@ -12,6 +13,26 @@ import { toast } from 'react-toastify';
 interface CartToolsContext {
   dispatch: AppDispatch;
   getState: () => RootState;
+}
+
+function validateProductId(rawId: unknown): { ok: true; productId: number } | { ok: false; error: { error: true; message: string } } {
+  const productId = Number(rawId);
+  if (!productId || isNaN(productId) || productId <= 0) {
+    return {
+      ok: false,
+      error: { error: true, message: 'A valid positive numeric "productId" is required.' },
+    };
+  }
+  return { ok: true, productId };
+}
+
+function computeCartSummary(items: CartItem[]) {
+  const totalItems = items.reduce((sum, item) => sum + item.quantity, 0);
+  const totalAmount = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  return {
+    totalItems,
+    totalAmount: Number(totalAmount.toFixed(2)),
+  };
 }
 
 export function createCartTools(context: CartToolsContext): WebMCPTool[] {
@@ -26,15 +47,13 @@ export function createCartTools(context: CartToolsContext): WebMCPTool[] {
       properties: {},
     },
     execute: async () => {
-      const state = getState();
-      const cartItems = state.cart.items || [];
-      const totalAmount = cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
-      const totalItemsCount = cartItems.reduce((sum, item) => sum + item.quantity, 0);
+      const cartItems = getState().cart.items || [];
+      const summary = computeCartSummary(cartItems);
 
       return {
-        itemCount: totalItemsCount,
+        itemCount: summary.totalItems,
         uniqueItemCount: cartItems.length,
-        totalAmount: Number(totalAmount.toFixed(2)),
+        totalAmount: summary.totalAmount,
         currency: 'INR',
         items: cartItems.map((item) => ({
           id: item.id,
@@ -50,7 +69,7 @@ export function createCartTools(context: CartToolsContext): WebMCPTool[] {
 
   const addToCartTool: WebMCPTool = {
     name: 'add_to_cart',
-    description: 'Add a product to the user\'s shopping cart. Validates product ID, price, and quantity. In accordance with safety rules, asks for confirmation before committing.',
+    description: 'Add a product to the user\'s shopping cart. Validates product ID, price, and quantity. Asks for confirmation before committing.',
     consequentialHint: true,
     inputSchema: {
       type: 'object',
@@ -75,16 +94,10 @@ export function createCartTools(context: CartToolsContext): WebMCPTool[] {
       required: ['productId'],
     },
     execute: async (input: { productId?: number; quantity?: number; confirmed?: boolean }) => {
-      const productId = Number(input?.productId);
+      const idCheck = validateProductId(input?.productId);
+      if (!idCheck.ok) return idCheck.error;
+
       const quantity = Number(input?.quantity || 1);
-
-      if (!productId || isNaN(productId) || productId <= 0) {
-        return {
-          error: true,
-          message: 'A valid positive numeric "productId" is required.',
-        };
-      }
-
       if (isNaN(quantity) || quantity <= 0) {
         return {
           error: true,
@@ -93,31 +106,25 @@ export function createCartTools(context: CartToolsContext): WebMCPTool[] {
       }
 
       // Fetch authentic product data from catalog service to prevent client price tampering
-      const product = await productService.getProductById(productId);
+      const product = await productService.getProductById(idCheck.productId);
       if (!product) {
         return {
           error: true,
-          message: `Product with ID ${productId} does not exist in store catalog.`,
+          message: `Product with ID ${idCheck.productId} does not exist in store catalog.`,
         };
       }
 
-      // Customer confirmation check (Phase 5 requirement)
       if (!input?.confirmed) {
         return {
           requiresConfirmation: true,
           action: 'add_to_cart',
-          product: {
-            id: product.id,
-            title: product.title,
-            price: product.price,
-          },
+          product: { id: product.id, title: product.title, price: product.price },
           quantity,
           estimatedSubtotal: Number((product.price * quantity).toFixed(2)),
           message: `Are you sure you want to add ${quantity} × "${product.title}" (Rs.${product.price} each) to your cart? Please invoke add_to_cart with confirmed: true to proceed.`,
         };
       }
 
-      // Execute addition to Redux cart state
       dispatch(
         addToCart({
           id: product.id,
@@ -130,22 +137,11 @@ export function createCartTools(context: CartToolsContext): WebMCPTool[] {
 
       toast.success(`${quantity} × "${product.title}" added to cart`);
 
-      const state = getState();
-      const updatedTotal = state.cart.items.reduce((sum, item) => sum + item.price * item.quantity, 0);
-
       return {
         success: true,
         message: `Successfully added ${quantity} × "${product.title}" to cart.`,
-        addedItem: {
-          id: product.id,
-          title: product.title,
-          price: product.price,
-          quantity,
-        },
-        cartSummary: {
-          totalItems: state.cart.items.reduce((sum, item) => sum + item.quantity, 0),
-          totalAmount: Number(updatedTotal.toFixed(2)),
-        },
+        addedItem: { id: product.id, title: product.title, price: product.price, quantity },
+        cartSummary: computeCartSummary(getState().cart.items),
       };
     },
   };
@@ -171,16 +167,10 @@ export function createCartTools(context: CartToolsContext): WebMCPTool[] {
       required: ['productId', 'quantity'],
     },
     execute: async (input: { productId?: number; quantity?: number }) => {
-      const productId = Number(input?.productId);
+      const idCheck = validateProductId(input?.productId);
+      if (!idCheck.ok) return idCheck.error;
+
       const quantity = Number(input?.quantity);
-
-      if (!productId || isNaN(productId) || productId <= 0) {
-        return {
-          error: true,
-          message: 'A valid positive numeric "productId" is required.',
-        };
-      }
-
       if (isNaN(quantity) || quantity < 0) {
         return {
           error: true,
@@ -188,36 +178,28 @@ export function createCartTools(context: CartToolsContext): WebMCPTool[] {
         };
       }
 
-      const state = getState();
-      const existing = state.cart.items.find((item) => item.id === productId);
-
+      const existing = getState().cart.items.find((item) => item.id === idCheck.productId);
       if (!existing) {
         return {
           error: true,
-          message: `Product ID ${productId} is not currently in the shopping cart.`,
+          message: `Product ID ${idCheck.productId} is not currently in the shopping cart.`,
         };
       }
 
       if (quantity === 0) {
-        dispatch(removeFromCart(productId));
+        dispatch(removeFromCart(idCheck.productId));
         toast.info(`Removed "${existing.title}" from cart`);
       } else {
-        dispatch(updateQuantity({ id: productId, quantity }));
+        dispatch(updateQuantity({ id: idCheck.productId, quantity }));
         toast.info(`Updated "${existing.title}" quantity to ${quantity}`);
       }
-
-      const updatedState = getState();
-      const updatedTotal = updatedState.cart.items.reduce((sum, item) => sum + item.price * item.quantity, 0);
 
       return {
         success: true,
         action: quantity === 0 ? 'removed' : 'updated',
-        productId,
+        productId: idCheck.productId,
         newQuantity: quantity,
-        cartSummary: {
-          totalItems: updatedState.cart.items.reduce((sum, item) => sum + item.quantity, 0),
-          totalAmount: Number(updatedTotal.toFixed(2)),
-        },
+        cartSummary: computeCartSummary(getState().cart.items),
       };
     },
   };
@@ -238,45 +220,27 @@ export function createCartTools(context: CartToolsContext): WebMCPTool[] {
       required: ['productId'],
     },
     execute: async (input: { productId?: number }) => {
-      const productId = Number(input?.productId);
+      const idCheck = validateProductId(input?.productId);
+      if (!idCheck.ok) return idCheck.error;
 
-      if (!productId || isNaN(productId) || productId <= 0) {
-        return {
-          error: true,
-          message: 'A valid positive numeric "productId" is required.',
-        };
-      }
-
-      const state = getState();
-      const existing = state.cart.items.find((item) => item.id === productId);
-
+      const existing = getState().cart.items.find((item) => item.id === idCheck.productId);
       if (!existing) {
         return {
           error: true,
-          message: `Product ID ${productId} is not currently in the shopping cart.`,
+          message: `Product ID ${idCheck.productId} is not currently in the shopping cart.`,
         };
       }
 
-      dispatch(removeFromCart(productId));
+      dispatch(removeFromCart(idCheck.productId));
       toast.info(`"${existing.title}" removed from cart`);
-
-      const updatedState = getState();
-      const updatedTotal = updatedState.cart.items.reduce((sum, item) => sum + item.price * item.quantity, 0);
 
       return {
         success: true,
-        removedProduct: {
-          id: existing.id,
-          title: existing.title,
-        },
-        cartSummary: {
-          totalItems: updatedState.cart.items.reduce((sum, item) => sum + item.quantity, 0),
-          totalAmount: Number(updatedTotal.toFixed(2)),
-        },
+        removedProduct: { id: existing.id, title: existing.title },
+        cartSummary: computeCartSummary(getState().cart.items),
       };
     },
   };
 
   return [getCartTool, addToCartTool, updateCartTool, removeFromCartTool];
 }
-

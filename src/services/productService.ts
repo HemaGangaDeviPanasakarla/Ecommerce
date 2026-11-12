@@ -47,16 +47,5 @@ export const productService = {
       description: product.description ? String(product.description) : undefined,
     };
   },
-
-  /**
-   * Fetch all distinct categories from FakeStore API.
-   */
-  async getCategories(): Promise<string[]> {
-    const response = await fetch(`${API_BASE_URL}/products/categories`);
-    if (!response.ok) {
-      throw new Error(`Failed to fetch categories: ${response.statusText}`);
-    }
-    return await response.json();
-  },
 };
 

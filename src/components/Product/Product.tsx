@@ -88,8 +88,6 @@ export default function Product() {
     { label: '2⭐ & above', value: '2' },
   ];
 
-
-
   return (
     <div className="container mx-auto px-4 py-20">
       <h2 className="text-3xl font-bold text-center mb-8">Our Styles - Fashion that speaks for you</h2>
@@ -191,7 +189,6 @@ export default function Product() {
       </div>
 
       {filteredProducts.length > 0 ? (
-
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
           {filteredProducts.map(product => (
             <div
@@ -219,7 +216,6 @@ export default function Product() {
             </div>
           ))}
         </div>
-
       ) : (
         <div className="text-center py-12">
           <p className="text-xl">Sorry, no results found!</p>
