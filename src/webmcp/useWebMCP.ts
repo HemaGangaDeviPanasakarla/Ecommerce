@@ -24,12 +24,17 @@ export function useWebMCP() {
     const abortController = new AbortController();
     const { signal } = abortController;
 
-    const productTools = createProductTools();
+    const productTools = createProductTools({
+      dispatch,
+      getState: () => store.getState(),
+      navigate,
+    });
     const cartTools = createCartTools({
       dispatch,
       getState: () => store.getState(),
     });
     const checkoutTools = createCheckoutTools({
+      dispatch,
       getState: () => store.getState(),
       navigate,
     });

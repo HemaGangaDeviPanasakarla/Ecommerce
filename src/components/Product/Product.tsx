@@ -3,16 +3,40 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faCartPlus, faSearch, faChevronDown } from "@fortawesome/free-solid-svg-icons";
 import { useAppSelector, useAppDispatch } from "../../hooks";
 import { addToCart } from "../../features/cart/cartSlice";
-import { fetchProducts } from "../../features/products/productsSlice";
+import {
+  applyProductFilters,
+  fetchProducts,
+  resetProductFilters,
+  setProductFilters,
+} from "../../features/products/productsSlice";
 import { toast } from "react-toastify";
 import type { Product } from '../../features/products/types';
+
+const categories = [
+  { label: 'All Categories', value: 'All' },
+  { label: "Men's Clothing", value: "men's clothing" },
+  { label: "Women's Clothing", value: "women's clothing" },
+  { label: "Jewelry", value: "jewelery" },
+  { label: "Electronics", value: "electronics" },
+];
+
+const priceOptions: Array<{ label: string; minPrice: number | null; maxPrice: number | null }> = [
+  { label: 'All Prices', minPrice: null, maxPrice: null },
+  { label: 'Under ₹500', minPrice: null, maxPrice: 500 },
+  { label: '₹500 - ₹1000', minPrice: 500, maxPrice: 1000 },
+  { label: 'Above ₹1000', minPrice: 1000, maxPrice: null },
+];
+
+const ratingOptions: Array<{ label: string; minRating: number | null }> = [
+  { label: 'All Ratings', minRating: null },
+  { label: '4⭐ & above', minRating: 4 },
+  { label: '3⭐ & above', minRating: 3 },
+  { label: '2⭐ & above', minRating: 2 },
+];
+
 export default function Product() {
   const dispatch = useAppDispatch();
-  const { items: products } = useAppSelector((state) => state.products);
-  const [search, setSearch] = useState('');
-  const [category, setCategory] = useState('All');
-  const [priceFilter, setPriceFilter] = useState('All');
-  const [ratingFilter, setRatingFilter] = useState('All');
+  const { items: products, status, filters } = useAppSelector((state) => state.products);
 
   const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
   const [showPriceDropdown, setShowPriceDropdown] = useState(false);
@@ -23,8 +47,10 @@ export default function Product() {
   const ratingRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    dispatch(fetchProducts());
-  }, [dispatch]);
+    if (status === 'idle' || status === 'failed') {
+      dispatch(fetchProducts());
+    }
+  }, [dispatch, status]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -43,17 +69,26 @@ export default function Product() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const filteredProducts = products.filter(product => {
-    const matchesSearch = product.title.toLowerCase().includes(search.toLowerCase());
-    const matchesCategory = category === 'All' || product.category.toLowerCase() === category.toLowerCase();
-    const matchesPrice = priceFilter === 'All' ||
-      (priceFilter === '<500' && product.price < 500) ||
-      (priceFilter === '500-1000' && product.price >= 500 && product.price <= 1000) ||
-      (priceFilter === '>1000' && product.price > 1000);
-    const matchesRating = ratingFilter === 'All' || product.rating >= parseFloat(ratingFilter);
+  const filteredProducts = applyProductFilters(products, filters);
+  const hasActiveFilters =
+    filters.search.trim() !== '' ||
+    filters.category !== 'All' ||
+    filters.minPrice !== null ||
+    filters.maxPrice !== null ||
+    filters.minRating !== null;
 
-    return matchesSearch && matchesCategory && matchesPrice && matchesRating;
-  });
+  const categoryLabel = categories.find((option) => option.value === filters.category)?.label || filters.category;
+
+  const priceLabel =
+    filters.minPrice === null && filters.maxPrice === null
+      ? 'All Prices'
+      : filters.minPrice !== null && filters.maxPrice !== null
+        ? `₹${filters.minPrice} - ₹${filters.maxPrice}`
+        : filters.minPrice !== null
+          ? `Above ₹${filters.minPrice}`
+          : `Under ₹${filters.maxPrice}`;
+
+  const ratingLabel = filters.minRating === null ? 'All Ratings' : `${filters.minRating}⭐ & above`;
 
   const handleAddToCart = (product: Product) => {
     dispatch(addToCart({
@@ -66,28 +101,6 @@ export default function Product() {
     toast.success(`${product.title} added to cart`);
   };
 
-  const categories = [
-    { label: 'All Categories', value: 'All' },
-    { label: "Men's Clothing", value: "men's clothing" },
-    { label: "Women's Clothing", value: "women's clothing" },
-    { label: "Jewelry", value: "jewelery" },
-    { label: "Electronics", value: "electronics" },
-  ];
-
-  const priceFilters = [
-    { label: 'All Prices', value: 'All' },
-    { label: 'Under ₹500', value: '<500' },
-    { label: '₹500 - ₹1000', value: '500-1000' },
-    { label: 'Above ₹1000', value: '>1000' },
-  ];
-
-  const ratingFilters = [
-    { label: 'All Ratings', value: 'All' },
-    { label: '4⭐ & above', value: '4' },
-    { label: '3⭐ & above', value: '3' },
-    { label: '2⭐ & above', value: '2' },
-  ];
-
   return (
     <div className="container mx-auto px-4 py-20">
       <h2 className="text-3xl font-bold text-center mb-8">Our Styles - Fashion that speaks for you</h2>
@@ -99,8 +112,8 @@ export default function Product() {
             className="w-full pl-12 pr-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-gray-400"
             type="search"
             placeholder="Search products..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            value={filters.search}
+            onChange={(e) => dispatch(setProductFilters({ search: e.target.value }))}
             autoFocus
             {...{
               'tool-name': 'search_products_input',
@@ -114,7 +127,7 @@ export default function Product() {
             className="flex items-center justify-between px-4 py-3 border rounded-lg cursor-pointer min-w-[180px]"
             onClick={() => setShowCategoryDropdown(!showCategoryDropdown)}
           >
-            <span>{categories.find(c => c.value === category)?.label}</span>
+            <span>{categoryLabel}</span>
             <FontAwesomeIcon icon={faChevronDown} />
           </div>
           {showCategoryDropdown && (
@@ -124,7 +137,7 @@ export default function Product() {
                   key={option.value}
                   className="px-4 py-2 hover:bg-gray-100 cursor-pointer"
                   onClick={() => {
-                    setCategory(option.value);
+                    dispatch(setProductFilters({ category: option.value }));
                     setShowCategoryDropdown(false);
                   }}
                 >
@@ -140,17 +153,17 @@ export default function Product() {
             className="flex items-center justify-between px-4 py-3 border rounded-lg cursor-pointer min-w-[180px]"
             onClick={() => setShowPriceDropdown(!showPriceDropdown)}
           >
-            <span>{priceFilters.find(p => p.value === priceFilter)?.label}</span>
+            <span>{priceLabel}</span>
             <FontAwesomeIcon icon={faChevronDown} />
           </div>
           {showPriceDropdown && (
             <ul className="absolute z-10 w-full mt-1 bg-white border rounded-lg shadow-lg">
-              {priceFilters.map(option => (
+              {priceOptions.map(option => (
                 <li
-                  key={option.value}
+                  key={option.label}
                   className="px-4 py-2 hover:bg-gray-100 cursor-pointer"
                   onClick={() => {
-                    setPriceFilter(option.value);
+                    dispatch(setProductFilters({ minPrice: option.minPrice, maxPrice: option.maxPrice }));
                     setShowPriceDropdown(false);
                   }}
                 >
@@ -166,17 +179,17 @@ export default function Product() {
             className="flex items-center justify-between px-4 py-3 border rounded-lg cursor-pointer min-w-[180px]"
             onClick={() => setShowRatingDropdown(!showRatingDropdown)}
           >
-            <span>{ratingFilters.find(r => r.value === ratingFilter)?.label}</span>
+            <span>{ratingLabel}</span>
             <FontAwesomeIcon icon={faChevronDown} />
           </div>
           {showRatingDropdown && (
             <ul className="absolute z-10 w-full mt-1 bg-white border rounded-lg shadow-lg">
-              {ratingFilters.map(option => (
+              {ratingOptions.map(option => (
                 <li
-                  key={option.value}
+                  key={option.label}
                   className="px-4 py-2 hover:bg-gray-100 cursor-pointer"
                   onClick={() => {
-                    setRatingFilter(option.value);
+                    dispatch(setProductFilters({ minRating: option.minRating }));
                     setShowRatingDropdown(false);
                   }}
                 >
@@ -186,9 +199,20 @@ export default function Product() {
             </ul>
           )}
         </div>
+
+        {hasActiveFilters && (
+          <button
+            type="button"
+            onClick={() => dispatch(resetProductFilters())}
+            className="px-4 py-3 text-sm text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition-colors cursor-pointer"
+          >
+            Clear filters
+          </button>
+        )}
       </div>
 
       {filteredProducts.length > 0 ? (
+
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
           {filteredProducts.map(product => (
             <div
@@ -216,6 +240,7 @@ export default function Product() {
             </div>
           ))}
         </div>
+
       ) : (
         <div className="text-center py-12">
           <p className="text-xl">Sorry, no results found!</p>

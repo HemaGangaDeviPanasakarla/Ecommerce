@@ -1,69 +1,39 @@
-import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAppSelector, useAppDispatch } from '../../hooks';
-import { clearCart } from '../../features/cart/cartSlice';
+import {
+  resetCheckout,
+  setCheckoutForm,
+  submitCheckout,
+  type CheckoutForm,
+} from '../../features/checkout/checkoutSlice';
 import { toast } from 'react-toastify';
 
 export default function Checkout() {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const { items: cartItems } = useAppSelector((state) => state.cart);
-
-  const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    address: '',
-    paymentOption: 'select any option',
-  });
-
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [orderConfirmed, setOrderConfirmed] = useState(false);
-  const [finalTotal, setFinalTotal] = useState(0); 
+  const {
+    form: formData,
+    errors,
+    isSubmitting,
+    orderConfirmed,
+    finalTotal,
+  } = useAppSelector((state) => state.checkout);
 
   const total = cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
-    if (errors[name]) {
-      setErrors((prev) => ({ ...prev, [name]: '' }));
-    }
-  };
-
-  const validateForm = () => {
-    const newErrors: Record<string, string> = {};
-    if (!formData.name.trim()) newErrors.name = 'Name is required';
-    if (!formData.email.trim()) {
-      newErrors.email = 'Email is required';
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-      newErrors.email = 'Please enter a valid email';
-    }
-    if (!formData.address.trim()) newErrors.address = 'Address is required';
-    if (formData.paymentOption === 'select any option') newErrors.paymentOption = 'Please select a payment method';
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+    dispatch(setCheckoutForm({ [name]: value } as Partial<CheckoutForm>));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!validateForm()) {
-      toast.error("Please fill all required fields correctly");
-      return;
-    }
-
-    setIsSubmitting(true);
     try {
-      await new Promise((resolve) => setTimeout(resolve, 1500));
-      setFinalTotal(total); 
-      dispatch(clearCart());
-      setOrderConfirmed(true);
+      await dispatch(submitCheckout()).unwrap();
       toast.success("Order placed successfully!");
-    } catch {
-      toast.error("Failed to place order");
-    } finally {
-      setIsSubmitting(false);
+    } catch (err: any) {
+      toast.error(err?.message || "Please fill all required fields correctly");
     }
   };
 
@@ -83,10 +53,13 @@ export default function Checkout() {
             <p><strong>Email:</strong> {formData.email}</p>
             <p><strong>Address:</strong> {formData.address}</p>
             <p><strong>Payment Method:</strong> {formData.paymentOption}</p>
-            <p><strong>Total Amount:</strong> Rs.{finalTotal.toFixed(2)}</p> 
+            <p><strong>Total Amount:</strong> Rs.{finalTotal.toFixed(2)}</p>
           </div>
           <button
-            onClick={() => navigate('/home')}
+            onClick={() => {
+              dispatch(resetCheckout());
+              navigate('/home');
+            }}
             className="mt-6 w-full bg-gray-800 text-white py-2 rounded hover:bg-gray-700 transition-colors"
           >
             Back to Home
