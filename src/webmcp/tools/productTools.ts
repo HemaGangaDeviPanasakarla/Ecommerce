@@ -1,11 +1,19 @@
 /**
  * Product-related WebMCP Tools
- * Reuses existing productService and application catalog logic.
+ * Applies filters to the live Products page (Redux + navigation) and returns matches.
  */
 
 import type { WebMCPTool } from '../types';
+import type { AppDispatch, RootState } from '../../store';
+import type { NavigateFunction } from 'react-router-dom';
 import { productService } from '../../services/productService';
 import type { Product } from '../../features/products/types';
+import {
+  applyProductFilters,
+  fetchProducts,
+  setProductFilters,
+  type ProductFilters,
+} from '../../features/products/productsSlice';
 
 interface CatalogFilterInput {
   query?: string;
@@ -13,61 +21,168 @@ interface CatalogFilterInput {
   minPrice?: number;
   maxPrice?: number;
   minRating?: number;
+  limit?: number;
 }
 
-async function filterCatalogProducts(input: CatalogFilterInput): Promise<
-  | { error: true; message: string }
-  | {
-      error: false;
-      filtered: Product[];
-      query: string;
-      category: string;
-      minPrice: number | null;
-      maxPrice: number | null;
-      minRating: number | null;
-    }
-> {
-  const query = (input.query || '').trim();
-  const queryWords = query ? query.toLowerCase().split(/\s+/).filter(Boolean) : [];
-  const category = input.category && input.category !== 'All' ? input.category.toLowerCase() : null;
+interface ProductToolsContext {
+  dispatch: AppDispatch;
+  getState: () => RootState;
+  navigate: NavigateFunction;
+}
+
+const KNOWN_CATEGORIES = ["men's clothing", "women's clothing", 'jewelery', 'electronics'];
+
+function normalizeCategory(value?: string): string {
+  if (!value || value === 'All') return 'All';
+  const normalized = value.toLowerCase().replace(/['’]/g, '');
+  const match = KNOWN_CATEGORIES.find(
+    (category) => category.toLowerCase().replace(/['’]/g, '') === normalized
+  );
+  return match || value;
+}
+
+function toFilters(input: CatalogFilterInput): ProductFilters {
+  return {
+    search: (input.query || '').trim(),
+    category: normalizeCategory(input.category),
+    minPrice: typeof input.minPrice === 'number' ? input.minPrice : null,
+    maxPrice: typeof input.maxPrice === 'number' ? input.maxPrice : null,
+    minRating: typeof input.minRating === 'number' ? input.minRating : null,
+  };
+}
+
+function validateFilterInput(input: CatalogFilterInput): { error: true; message: string } | null {
   const minPrice = typeof input.minPrice === 'number' ? input.minPrice : null;
   const maxPrice = typeof input.maxPrice === 'number' ? input.maxPrice : null;
   const minRating = typeof input.minRating === 'number' ? input.minRating : null;
 
-  if (minPrice !== null && maxPrice !== null && minPrice > maxPrice) {
-    return {
-      error: true,
-      message: 'Invalid price range: minPrice cannot be greater than maxPrice.',
-    };
+  if (minPrice !== null && minPrice < 0) {
+    return { error: true, message: 'minPrice cannot be negative.' };
   }
+  if (maxPrice !== null && maxPrice < 0) {
+    return { error: true, message: 'maxPrice cannot be negative.' };
+  }
+  if (minPrice !== null && maxPrice !== null && minPrice > maxPrice) {
+    return { error: true, message: 'Invalid price range: minPrice cannot be greater than maxPrice.' };
+  }
+  if (minRating !== null && (minRating < 0 || minRating > 5)) {
+    return { error: true, message: 'minRating must be between 0 and 5.' };
+  }
+  return null;
+}
 
-  const products = await productService.getProducts();
-  const filtered = products.filter((p: Product) => {
-    const titleLower = p.title.toLowerCase();
-    const matchesQuery = !query || titleLower.includes(query.toLowerCase()) || queryWords.every((w) => titleLower.includes(w));
-    const matchesCat = !category || p.category.toLowerCase() === category;
-    const matchesMinPrice = minPrice === null || p.price >= minPrice;
-    const matchesMaxPrice = maxPrice === null || p.price <= maxPrice;
-    const matchesRating = minRating === null || p.rating >= minRating;
-    return matchesQuery && matchesCat && matchesMinPrice && matchesMaxPrice && matchesRating;
-  });
-
+function buildFilterSchema() {
   return {
-    error: false,
-    filtered,
-    query,
-    category: category || 'All',
-    minPrice,
-    maxPrice,
-    minRating,
+    type: 'object' as const,
+    properties: {
+      query: {
+        type: 'string' as const,
+        description: 'Optional keyword to search in product title.',
+      },
+      category: {
+        type: 'string' as const,
+        description: 'Category name ("All", "men\'s clothing", "women\'s clothing", "jewelery", "electronics").',
+        enum: ['All', "men's clothing", "women's clothing", 'jewelery', 'electronics'],
+      },
+      minPrice: {
+        type: 'number' as const,
+        description: 'Minimum price threshold in INR (Rs.).',
+        minimum: 0,
+      },
+      maxPrice: {
+        type: 'number' as const,
+        description: 'Maximum price threshold in INR (Rs.). Use for "under/below X" requests.',
+        minimum: 0,
+      },
+      minRating: {
+        type: 'number' as const,
+        description: 'Minimum customer star rating (e.g. 2, 3, 4, 4.5).',
+        minimum: 0,
+        maximum: 5,
+      },
+      limit: {
+        type: 'integer' as const,
+        description: 'Maximum number of items to return (default 20).',
+        minimum: 1,
+        maximum: 50,
+      },
+    },
   };
 }
 
-export function createProductTools(): WebMCPTool[] {
+let catalogPromise: Promise<Product[]> | null = null;
+
+export function createProductTools(context: ProductToolsContext): WebMCPTool[] {
+  const { dispatch, getState, navigate } = context;
+
+  const loadCatalog = async (): Promise<Product[]> => {
+    const cached = getState().products.items;
+    if (cached.length > 0) return cached;
+
+    if (!catalogPromise) {
+      catalogPromise = dispatch(fetchProducts())
+        .unwrap()
+        .finally(() => {
+          catalogPromise = null;
+        });
+    }
+    return catalogPromise;
+  };
+
+  const applyFiltersAndNavigate = async (input: CatalogFilterInput, defaultLimit: number) => {
+    const filters = toFilters(input);
+    const limit = typeof input.limit === 'number' && input.limit > 0 ? input.limit : defaultLimit;
+    const products = await loadCatalog();
+    const matched = applyProductFilters(products, filters);
+
+    dispatch(setProductFilters(filters));
+    navigate('/products');
+
+    return {
+      success: true,
+      appliedToPage: true,
+      navigatedTo: '/products',
+      appliedFilters: {
+        query: filters.search || undefined,
+        category: filters.category,
+        minPrice: filters.minPrice,
+        maxPrice: filters.maxPrice,
+        minRating: filters.minRating,
+      },
+      totalMatches: matched.length,
+      returnedCount: Math.min(matched.length, limit),
+      products: matched.slice(0, limit),
+    };
+  };
+
+  const filterProductsTool: WebMCPTool = {
+    name: 'filter_products',
+    description:
+      'Filter the products shown on the store\'s Products page by category, price range, minimum rating, and optional keyword, then navigate the shopper to the filtered results. Use this whenever the shopper asks to filter, refine, or browse products on the website.',
+    inputSchema: buildFilterSchema(),
+    execute: async (input: CatalogFilterInput) => {
+      const validationError = validateFilterInput(input || {});
+      if (validationError) return validationError;
+      return applyFiltersAndNavigate(input || {}, 20);
+    },
+  };
+
+  const setProductFiltersTool: WebMCPTool = {
+    name: 'set_product_filters',
+    description:
+      'Apply filters (keyword, category, min/max price, minimum rating) directly to the store\'s Products page and navigate the shopper there. Prefer this or filter_products when the shopper wants to filter products on the website.',
+    inputSchema: buildFilterSchema(),
+    execute: async (input: CatalogFilterInput) => {
+      const validationError = validateFilterInput(input || {});
+      if (validationError) return validationError;
+      return applyFiltersAndNavigate(input || {}, 20);
+    },
+  };
+
   const searchProductsTool: WebMCPTool = {
     name: 'search_products',
-    description: 'Search products in the store catalog by title keyword and optional category filter.',
-    readOnlyHint: true,
+    description:
+      'Search products by title keyword and apply the search to the Products page so the shopper sees the results. Optionally filter by category and price.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -99,7 +214,7 @@ export function createProductTools(): WebMCPTool[] {
       },
       required: ['query'],
     },
-    execute: async (input: CatalogFilterInput & { limit?: number }) => {
+    execute: async (input: CatalogFilterInput) => {
       const query = (input?.query || '').trim();
       if (!query) {
         return {
@@ -108,19 +223,39 @@ export function createProductTools(): WebMCPTool[] {
         };
       }
 
-      const result = await filterCatalogProducts({ ...input, query });
-      if (result.error) return result;
+      const validationError = validateFilterInput({ ...input, query });
+      if (validationError) return validationError;
 
-      const limit = input.limit && input.limit > 0 ? input.limit : 10;
-      const results = result.filtered.slice(0, limit);
+      const result = await applyFiltersAndNavigate({ ...input, query }, 10);
+      return {
+        ...result,
+        query,
+        priceRange: {
+          minPrice: result.appliedFilters.minPrice,
+          maxPrice: result.appliedFilters.maxPrice,
+        },
+      };
+    },
+  };
+
+  const getProductFiltersTool: WebMCPTool = {
+    name: 'get_product_filters',
+    description:
+      'Read the product filters currently applied to the store\'s Products page (search keyword, category, min/max price, minimum rating) and the number of matching products.',
+    readOnlyHint: true,
+    inputSchema: {
+      type: 'object',
+      properties: {},
+    },
+    execute: async () => {
+      const products = await loadCatalog();
+      const filters = getState().products.filters;
+      const matched = applyProductFilters(products, filters);
 
       return {
-        query: result.query,
-        category: result.category,
-        priceRange: { minPrice: result.minPrice, maxPrice: result.maxPrice },
-        totalMatches: result.filtered.length,
-        returnedCount: results.length,
-        products: results,
+        filters,
+        totalProducts: products.length,
+        totalMatches: matched.length,
       };
     },
   };
@@ -162,67 +297,11 @@ export function createProductTools(): WebMCPTool[] {
     },
   };
 
-  const filterProductsTool: WebMCPTool = {
-    name: 'filter_products',
-    description: 'Filter catalog products by keyword query, category, price range, and minimum rating.',
-    readOnlyHint: true,
-    inputSchema: {
-      type: 'object',
-      properties: {
-        query: {
-          type: 'string',
-          description: 'Optional keyword to search in product title.',
-        },
-        category: {
-          type: 'string',
-          description: 'Category name ("All", "men\'s clothing", "women\'s clothing", "jewelery", "electronics").',
-          enum: ['All', "men's clothing", "women's clothing", 'jewelery', 'electronics'],
-        },
-        minPrice: {
-          type: 'number',
-          description: 'Minimum price threshold in INR (Rs.).',
-          minimum: 0,
-        },
-        maxPrice: {
-          type: 'number',
-          description: 'Maximum price threshold in INR (Rs.).',
-          minimum: 0,
-        },
-        minRating: {
-          type: 'number',
-          description: 'Minimum customer star rating (e.g. 2, 3, 4, 4.5).',
-          minimum: 0,
-          maximum: 5,
-        },
-        limit: {
-          type: 'integer',
-          description: 'Maximum number of items to return (default 20).',
-          minimum: 1,
-          maximum: 50,
-        },
-      },
-    },
-    execute: async (input: CatalogFilterInput & { limit?: number }) => {
-      const result = await filterCatalogProducts(input || {});
-      if (result.error) return result;
-
-      const limit = input?.limit && input.limit > 0 ? input.limit : 20;
-      const results = result.filtered.slice(0, limit);
-
-      return {
-        totalMatches: result.filtered.length,
-        returnedCount: results.length,
-        appliedFilters: {
-          query: result.query || undefined,
-          category: result.category,
-          minPrice: result.minPrice,
-          maxPrice: result.maxPrice,
-          minRating: result.minRating,
-        },
-        products: results,
-      };
-    },
-  };
-
-  return [searchProductsTool, getProductDetailsTool, filterProductsTool];
+  return [
+    filterProductsTool,
+    setProductFiltersTool,
+    searchProductsTool,
+    getProductFiltersTool,
+    getProductDetailsTool,
+  ];
 }

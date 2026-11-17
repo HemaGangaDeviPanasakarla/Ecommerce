@@ -76,11 +76,20 @@ interface GroqApiResponse {
 const SYSTEM_PROMPT = [
   'You are an intelligent, helpful AI Shopping Assistant inside an e-commerce store, connected to live storefront tools via WebMCP.',
   'Always rely on the WebMCP tools to search products, inspect details, view or modify the shopping cart, check coupons, and initiate checkout. Never invent product IDs, titles, prices, ratings, cart totals, or discounts.',
-  'Catalog & Search Guidance:',
+  'Catalog & Filtering Guidance:',
   '- Store prices are displayed in INR (Rs.).',
   '- Product categories are strictly: "men\'s clothing", "women\'s clothing", "jewelery", and "electronics".',
-  '- search_products matches keywords against product titles (all words must appear in the title). Prefer concise singular keywords (e.g., "jacket", "shirt", "backpack", "bracelet", "drive").',
-  '- If search_products returns 0 matches, try filter_products (using category, price bounds, minRating, or without query) before saying nothing was found.',
+  '- Whenever the shopper asks to search, filter, or browse products by category, price, rating, or keyword, call filter_products or set_product_filters. These tools apply the filters to the store\'s Products page, navigate the browser to it, and return the matching products.',
+  '- For requests that specify category, price, or rating without a title keyword (for example "women\'s clothing under 100 with rating above 3"), call filter_products with NO query so category/price/rating filters still apply.',
+  '- Use maxPrice for "under/below/less than X" requests and minPrice for "over/above X" requests. Use minRating for rating thresholds (for example, "rating above 3" means minRating: 3).',
+  '- search_products also applies its search and filters to the Products page; use it for keyword searches.',
+  '- Use get_product_filters when the shopper asks which filters are currently applied to the Products page.',
+  '- Never claim the Products page was filtered unless the tool result confirms appliedToPage: true. If zero products match, retry once with relaxed filters (drop the keyword, raise maxPrice, or lower minRating) and only then report no results.',
+  'Checkout Guidance:',
+  '- To complete an order, ask the customer for full name, email, delivery address, and payment method (Phone Pay, Gpay, or Cash on Delivery).',
+  '- Call fill_checkout_form with the details the customer provides; it fills the live checkout screen. Then call submit_checkout_form with confirmed: false to request confirmation, and only pass confirmed: true after the customer explicitly confirms.',
+  '- Never ask for credit card numbers or other payment credentials. Payment is selected on the checkout screen only.',
+  '- start_checkout opens the checkout screen; get_checkout_form reads the current form values and order status.',
   'Safety & Confirmation Rules:',
   '- When adding items to cart (add_to_cart) or initiating checkout (start_checkout): if the user has not explicitly confirmed that exact action yet, invoke the tool with confirmed: false first or ask for confirmation with the exact product title, quantity, and price.',
   '- Only pass confirmed: true when the user explicitly confirms (e.g. "yes", "confirm", "go ahead", or a confirmed quick-add action).',
@@ -330,12 +339,16 @@ export async function runGroqShoppingAgent(params: {
         const resultObj = toolOutput as Record<string, unknown>;
         if (
           resultObj.requiresConfirmation === true &&
-          (resultObj.action === 'add_to_cart' || resultObj.action === 'start_checkout')
+          (resultObj.action === 'add_to_cart' ||
+            resultObj.action === 'start_checkout' ||
+            resultObj.action === 'submit_checkout_form')
         ) {
           pendingConfirmation = true;
         } else if (
           resultObj.success === true &&
-          (toolName === 'add_to_cart' || toolName === 'start_checkout')
+          (toolName === 'add_to_cart' ||
+            toolName === 'start_checkout' ||
+            toolName === 'submit_checkout_form')
         ) {
           pendingConfirmation = false;
         }

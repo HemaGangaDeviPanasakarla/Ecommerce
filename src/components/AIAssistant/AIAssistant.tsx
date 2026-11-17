@@ -406,6 +406,13 @@ export default function AIAssistant() {
           <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50/50">
             {messages.map((msg, idx) => {
               const isLatestMessage = idx === messages.length - 1;
+              const appliedToPage =
+                msg.toolCalls?.some(
+                  (tc) =>
+                    typeof tc.output === 'object' &&
+                    tc.output !== null &&
+                    (tc.output as Record<string, unknown>).appliedToPage === true
+                ) ?? false;
               return (
                 <div
                   key={msg.id}
@@ -493,6 +500,11 @@ export default function AIAssistant() {
                   {/* Inline Product Cards */}
                   {msg.products && msg.products.length > 0 && (
                     <div className="mt-2 space-y-2 w-full max-w-[95%]">
+                      {appliedToPage && (
+                        <p className="text-[11px] font-semibold text-emerald-700">
+                          Filters applied on the Products page
+                        </p>
+                      )}
                       {msg.products.slice(0, 4).map((prod) => (
                         <div
                           key={prod.id}
@@ -545,10 +557,10 @@ export default function AIAssistant() {
             <button
               type="button"
               disabled={isProcessing}
-              onClick={() => handleSend('Show me Fit T-Shirts under Rs.30')}
+              onClick={() => handleSend("Show me women's clothing under 100 with rating above 3")}
               className="text-[11px] bg-gray-100 hover:bg-gray-200 text-gray-700 px-2.5 py-1 rounded-full whitespace-nowrap transition-colors cursor-pointer flex items-center gap-1 disabled:opacity-50"
             >
-              <FaSearch size={10} /> Fit T-Shirts under 30
+              <FaSearch size={10} /> Women's clothing under 100, 3★+
             </button>
             <button
               type="button"
